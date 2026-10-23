@@ -4,6 +4,8 @@ A small, containerized distributed system built to explore one of the most funda
 
 Built with Python, Flask, and Docker Compose, this project runs three independent nodes that replicate key-value data over HTTP.
 
+Credits - [NextWorkAI](https://nextwork.ai/projects/56330f0f-e0c6-474e-bda9-d625ff412ba0)
+
 ## 🧠 What I Explored
 
 The [CAP theorem](https://en.wikipedia.org/wiki/CAP_theorem) states that when a network partition occurs, a distributed system cannot guarantee both consistency and availability for every request.
@@ -115,16 +117,12 @@ Observe how the write response and the contents of each node's local store diffe
 
 ## ⚠️ Limitations
 
-This is an educational implementation, not a production-ready distributed database.
-
 - CP writes can leave partial updates on replicas when a later replication request fails.
 - AP replicas can diverge during network failures.
 - Synchronization is manual and does not handle deletions.
 - Timestamp-based LWW can be affected by clock differences and concurrent writes.
 - Data is in memory and is lost when a container restarts.
 - Consensus, durable storage, and automatic recovery are not implemented.
-
-These limitations are part of the learning process: a successful HTTP response alone doesn't establish that a distributed write is safely committed.
 
 ## 🎯 What This Project Taught Me
 
@@ -133,8 +131,6 @@ These limitations are part of the learning process: a successful HTTP response a
 - Why partial writes occur and why rollback is not trivial.
 - How timestamp-based conflict resolution works—and where it falls short.
 - Why real distributed databases need stronger coordination and recovery mechanisms.
-
-**Next learning goal:** Explore quorum-based replication and consensus protocols such as Raft.
 
 ---
 
