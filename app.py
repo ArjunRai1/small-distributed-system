@@ -23,7 +23,7 @@ def get_all_data():
 @app.route("/data/<key>", methods=["GET"])
 def get_data(key):
     if key in store:
-        return jsonify({"node": NODE_NAME, "key": key, "value": store[key]})
+        return jsonify({"node": NODE_NAME, "key": key, "value": store[key], "timestamp": store[key]["timestamp"]})
     return jsonify({"error": "Key not found"}), 404
 
 
@@ -31,6 +31,7 @@ def get_data(key):
 def put_data(key):
     global MODE
     value = request.json.get("value")
+    timestamp = time.time()
 
     if MODE == "CP":
         # CP Mode: Replicate to ALL peers before confirming
@@ -38,7 +39,7 @@ def put_data(key):
             try:
                 resp = http_requests.post(
                     f"http://{peer}/replicate",
-                    json={"key": key, "value": value},
+                    json={"key": key, "value": value, "timestamp": timestamp},
                     timeout=2,
                 )
                 if resp.status_code != 200:
@@ -59,20 +60,21 @@ def put_data(key):
             "node": NODE_NAME,
             "key": key,
             "value": value,
+            "timestamp": timestamp,
             "mode": "CP",
             "message": "All nodes consistent",
         })
 
     else:
         # AP Mode: Write locally first, replicate best-effort
-        store[key] = value
+        store[key] = {"value": value, "timestamp": timestamp}
 
         replication_results = []
         for peer in PEERS:
             try:
                 http_requests.post(
                     f"http://{peer}/replicate",
-                    json={"key": key, "value": value},
+                    json={"key": key, "value": value, "timestamp": timestamp},
                     timeout=1,
                 )
                 replication_results.append({"peer": peer, "status": "replicated"})
@@ -84,6 +86,7 @@ def put_data(key):
             "node": NODE_NAME,
             "key": key,
             "value": value,
+            "timestamp": timestamp,
             "mode": "AP",
             "replication": replication_results,
         })
@@ -92,7 +95,9 @@ def put_data(key):
 def replicate():
     key = request.json.get("key")
     value = request.json.get("value")
-    store[key] = value
+    timestamp = request.json.get("timestamp", time.time())
+    if key not in store or timestamp >= store[key]["timestamp"]:
+        store[key] = {"value": value, "timestamp": timestamp}
     return jsonify({"status": "ok", "node": NODE_NAME})
 
 
@@ -109,6 +114,31 @@ def set_mode():
         MODE = new_mode
         return jsonify({"status": "ok", "node": NODE_NAME, "mode": MODE})
     return jsonify({"error": "Mode must be CP or AP"}), 400
+
+@app.route("/sync", methods=["POST"])
+def sync():
+    """Fetch data from all peers and merge using last-write-wins."""
+    merged_count = 0
+
+    for peer in PEERS:
+        try:
+            resp = http_requests.get(f"http://{peer}/data", timeout=2)
+            if resp.status_code == 200:
+                peer_store = resp.json().get("store", {})
+                for key, entry in peer_store.items():
+                    peer_timestamp = entry["timestamp"]
+                    if key not in store or peer_timestamp > store[key]["timestamp"]:
+                        store[key] = entry
+                        merged_count += 1
+        except http_requests.exceptions.RequestException:
+            continue
+
+    return jsonify({
+        "status": "ok",
+        "node": NODE_NAME,
+        "merged_keys": merged_count,
+        "store": store,
+    })
 
 
 if __name__ == "__main__":
